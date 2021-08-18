@@ -250,7 +250,7 @@ if (!$ReaderSecurityGroupId -and !$ContributorSecurityGroupId)
 {
     if (!$SecurityGroupNamePrefix)
     {
-        Write-Host "Please provide SecurityGroupNamePrefix parameter"
+        Write-Host "Please provide SecurityGroupNamePrefix parameter" -ForegroundColor Red
         return;
     }
 }
@@ -258,13 +258,13 @@ else
 {
     if (!$ReaderSecurityGroupId)
     {
-        Write-Host "Please provide ReaderSecurityGroupId parameter"
+        Write-Host "Please provide ReaderSecurityGroupId parameter" -ForegroundColor Red
         return;
     }
 
     if (!$ContributorSecurityGroupId)
     {
-        Write-Host "Please provide ContributorSecurityGroupId parameter"
+        Write-Host "Please provide ContributorSecurityGroupId parameter" -ForegroundColor Red
         return;
     }
 }
@@ -274,6 +274,15 @@ $acct = Connect-AzAccount -Subscription $SubscriptionId
 Write-Host "Starting..." -ForegroundColor Green
 $storageScope = "/subscriptions/" + $SubscriptionId + "/resourceGroups/" + $ResourceGroupName + "/providers/Microsoft.Storage/storageAccounts/" + $StorageAccountName
 $containerScope = $storageScope + "/blobServices/default/containers/" + $ContainerName
+
+###############################################################
+# Check if the container name is "customerinsights".
+###############################################################
+if($ContainerName -cne "customerinsights")
+{
+	Write-Host "Container name must be customerinsights." -ForegroundColor Red
+	return;
+}
 
 ###############################################################
 # Check if the user has  "Storage Blob Data Owner" permissions.
