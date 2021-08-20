@@ -85,8 +85,9 @@ Param(
 
 function Retry([Action]$action)
 {
-    $attempts=3    
-    $sleepInSeconds=5
+    $attempts = 10
+    $sleepInSeconds = 5
+
     do
     {
         try
@@ -96,10 +97,22 @@ function Retry([Action]$action)
         }
         catch [Exception]
         {
-            Write-Host $_.Exception.Message
+            # Graph API throws bad request when owner already exists. Bad request will be considered success.
+            if ($_.Exception.Message.Contains("Bad Request"))
+            {
+                break;
+            }
         }            
         $attempts--
-        if ($attempts -gt 0) { sleep $sleepInSeconds }
+
+        if ($attempts -gt 0) 
+        { 
+            sleep $sleepInSeconds 
+        }
+        else
+        {
+            throw "Unable to complete operation. Retries exhausted."
+        }
     } while ($attempts -gt 0) 
 }
 
@@ -120,10 +133,17 @@ function CreateServicePrincipalIfNotExists($appId, $displayName)
     return $obj;
 }
 
-function CreateSecurityGroup($groupName, $ownerId)
+function CreateSecurityGroupIfNotExists($groupName, $ownerId)
 {
-    $grp = New-AzADGroup -DisplayName $groupName -MailNickName $groupName -ErrorAction Stop
+    $grp = Get-AzADGroup -DisplayName $groupName
+    
+    if (!$grp)
+    {
+        $grp = New-AzADGroup -DisplayName $groupName -MailNickName $groupName -ErrorAction Stop
+    }
+
     AddOwnerIfNotExists $grp.Id $ownerId
+
     return $grp;
 }
 
@@ -325,25 +345,27 @@ try
     if (!$ReaderSecurityGroupId)
     {
         Write-Host "Creating reader security group" $readerGroupName -ForegroundColor Green
-        $readerSg = CreateSecurityGroup $readerGroupName $mdlApp.Id
+        $readerSg = CreateSecurityGroupIfNotExists $readerGroupName $mdlApp.Id
     }
     else
     {
+        AddOwnerIfNotExists $ReaderSecurityGroupId $mdlApp.Id
+
         $readerSg = 
         [PSCustomObject]@{
             Id = $ReaderSecurityGroupId
         }
-
-        Write-Host $readerSg.Id
     }
 
     if (!$ContributorSecurityGroupId)
     {
         Write-Host "Creating contributor security group" $contributorGroupName -ForegroundColor Green
-        $contribSg = CreateSecurityGroup $contributorGroupName $mdlApp.Id
+        $contribSg = CreateSecurityGroupIfNotExists $contributorGroupName $mdlApp.Id
     }
     else
     {
+        AddOwnerIfNotExists $ContributorSecurityGroupId $mdlApp.Id
+
         $contribSg = 
         [PSCustomObject]@{
             Id = $ContributorSecurityGroupId
@@ -389,8 +411,18 @@ else
     }
     catch
     {
-        Write-Host "Error adding MDL app to the contributor group: $($PSItem.ToString())"
-        return;
+        $message = $($PSItem.ToString());
+
+        # Graph API throws exception if app is already a member. We will consider this as success.
+        if ($message.Contains("already exist"))
+        {
+            Write-Host "Membership already exists."
+        }
+        else
+        {
+            Write-Host "Error adding MDL app to the contributor group: $message"
+            return;
+        }
     }
 }
 
