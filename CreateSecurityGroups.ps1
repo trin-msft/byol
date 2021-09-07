@@ -133,8 +133,7 @@ if (!$FromMainScript)
         return;
     }
 
-    $acct = Connect-AzAccount -Subscription $SubscriptionId
-    Write-Host "Starting..." -ForegroundColor Green
+    Connect-AzAccount -Subscription $SubscriptionId
 }
 
 ###############################################################
@@ -152,23 +151,13 @@ try
     Write-Host "Creating security group $contributorGroupName" -ForegroundColor Green
     $contribSg = CreateSecurityGroupIfNotExists $contributorGroupName $mdlApp.Id
 
-    if (!$FromMainScript)
-    {
-        Write-Host "Reader security group id: " $readerSg.Id -ForegroundColor Green
-        Write-Host "Contributor security group id: " $contribSg.Id -ForegroundColor Green
-    }
-    else
-    {
-        [hashtable]$Return = @{} 
-        $Return.ReaderSecurityGroupId = $readerSg.Id
-        $Return.ContributorSecurityGroupId = $contribSg.Id
-        Return $Return 
-    }
+    [hashtable]$Return = @{} 
+    $Return.ReaderSecurityGroupId = $readerSg.Id
+    $Return.ContributorSecurityGroupId = $contribSg.Id
+    Return $Return 
 }
 catch
 {
     Write-Host "Error creating security groups: $($PSItem.ToString())" -ForegroundColor Red
     return;
 }
-
-Write-Host "Setup complete" -ForegroundColor Green
