@@ -162,23 +162,23 @@ function AddOwnerIfNotExists($groupId, $ownerId)
     Retry({Invoke-RestMethod -Method Post -Uri $url -Body $json -Headers $headers -ContentType 'application/json'})
 }
 
-function CreateContainerIfNotExists($ResourceGroupName, $StorageAccountName)
+function CreateContainerIfNotExists($ResourceGroupName, $StorageAccountName, $containerName)
 {
-	$storageAcc=Get-AzStorageAccount -ResourceGroupName $ResourceGroupName -Name $StorageAccountName      
-	## Get the storage account context  
-	$ctx=$storageAcc.Context
-    $isContainerExists=Get-AzStorageContainer -Name "customerinsights" -Context $ctx -ErrorAction SilentlyContinue
-	if(!$isContainerExists)  
-    {  
-        Write-Host -ForegroundColor Magenta "customerinsights - container does not exist."   
-		## Create a new Azure Storage Account  
-		New-AzStorageContainer -Name "customerinsights" -Context $ctx -Permission Container
-		Write-Host -ForegroundColor Green "customerinsights - container created successfully."
+    $storageAcc=Get-AzStorageAccount -ResourceGroupName $ResourceGroupName -Name $StorageAccountName      
+    ## Get the storage account context  
+    $ctx=$storageAcc.Context
+    $isContainerExists=Get-AzStorageContainer -Name $containerName -Context $ctx -ErrorAction SilentlyContinue
+    if(!$isContainerExists)  
+    {
+        Write-Host -ForegroundColor Magenta $containerName "- container does not exist."   
+        ## Create a new container 
+        New-AzStorageContainer -Name $containerName -Context $ctx -Permission Container
+        Write-Host -ForegroundColor Green $containerName "- container created successfully."
     }
-	else
-	{
-		Write-Host -ForegroundColor Green "customerinsights - container exists."   
-	}
+    else
+    {
+        Write-Host -ForegroundColor Green $containerName "-container exists."   
+    }
 }
 
 function GetCurrentUserObjectID 
@@ -213,12 +213,12 @@ function AssignRoleIfNotExists($userId, $scope, $roleName)
     }
 }
 
-function SetACL($storageContext, $currPath, $readerSgId, $contribSgId, $setDefault)
+function SetACL($storageContext, $containerName, $currPath, $readerSgId, $contribSgId, $setDefault)
 {
     $params =
     @{ 
         'Context' = $storageContext
-        'FileSystem' = "customerinsights"
+        'FileSystem' = $containerName
     }
 
     if ($currPath)
@@ -308,12 +308,13 @@ $acct = Connect-AzAccount -Subscription $SubscriptionId
 
 Write-Host "Starting..." -ForegroundColor Green
 $storageScope = "/subscriptions/" + $SubscriptionId + "/resourceGroups/" + $ResourceGroupName + "/providers/Microsoft.Storage/storageAccounts/" + $StorageAccountName
-$containerScope = $storageScope + "/blobServices/default/containers/customerinsights"
+$containerName = "customerinsights"
+$containerScope = $storageScope + "/blobServices/default/containers/" + $containerName
 
 ###############################################################
 # Check if the customerinsights container exists or create one.
 ###############################################################
-CreateContainerIfNotExists $ResourceGroupName $StorageAccountName
+CreateContainerIfNotExists $ResourceGroupName $StorageAccountName $containerName
 
 #############################################################################
 # Check if the user has  "Storage Blob Data Owner" permissions or assign it.
@@ -440,7 +441,7 @@ try
     {
         $setDefault = $false
     }
-    SetACL $storageContext $null $readerSg.Id $contribSg.Id $setDefault
+    SetACL $storageContext $containerName $null $readerSg.Id $contribSg.Id $setDefault
 
     ###############################################################
     # Setting ACL on the path
@@ -463,7 +464,7 @@ try
 
             $currPath = $currPath + $folders[$i] + "/"
             Write-Host "Setting ACL on folder" $currPath -ForegroundColor Green
-            SetACL $storageContext $currPath $readerSg.Id $contribSg.Id $setDefault 
+            SetACL $storageContext $containerName $currPath $readerSg.Id $contribSg.Id $setDefault 
         }
     }
 }
@@ -481,7 +482,7 @@ Write-Host "Setting ACL on the existing files and folders" -ForegroundColor Gree
 $params =
 @{ 
     'Context' = $storageContext
-    'FileSystem' = "customerinsights"
+    'FileSystem' = $containerName
 }
 
 if ($Path)
@@ -506,7 +507,7 @@ if ($updateAcl.FailedEntries)
 ###############################################################
 # Write output
 ###############################################################
-$output = 'https://' + $StorageAccountName + ".dfs.core.windows.net/customerinsights"
+$output = 'https://' + $StorageAccountName + ".dfs.core.windows.net/" + $containerName
 if ($Path)
 {
     $output = $output + "/" + $Path
