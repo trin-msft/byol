@@ -315,19 +315,19 @@ $containerScope = $storageScope + "/blobServices/default/containers/customerinsi
 ###############################################################
 CreateContainerIfNotExists $ResourceGroupName $StorageAccountName
 
-###############################################################
-# Check if the user has  "Storage Blob Data Owner" permissions.
-###############################################################
+#############################################################################
+# Check if the user has  "Storage Blob Data Owner" permissions or assign it.
+#############################################################################
 $userId = GetCurrentUserObjectID
 if ($userId)
 {
     $userRole = Get-AzRoleAssignment -ObjectId $userId -RoleDefinitionName "Storage Blob Data Owner" -Scope $storageScope
     if (!$userRole)
     {
-        Write-Host -ForegroundColor Magenta "User doesn't have Storage Blob Data Owner role on the storage account. Adding the role on the storage account"
+		Write-Host -ForegroundColor Magenta "User doesn't have Storage Blob Data Owner role on the storage account. Adding the role on the storage account"
 		New-AzRoleAssignment -ObjectId $userId -RoleDefinitionName "Storage Blob Data Owner" -Scope $storageScope
 		Write-Host -ForegroundColor Green "Succesfully added Storage Blob Data Owner role on the storage account."
-    }
+	}
 	else
 	{
 		Write-Host -ForegroundColor Green "Storage Blob Data owner role exists on the storage account"
