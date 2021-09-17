@@ -44,6 +44,7 @@ Prefix for security group names. Security groups will be named SecurityGroupName
 
 .PARAMETER Path
 Optional: Folder under the container that needs to be used as mount point. If not given, container will be used as the mount point.
+Note: This is not supported at this point.
 
 .PARAMETER ReaderSecurityGroupId
 Optional: Id of the reader security group.
