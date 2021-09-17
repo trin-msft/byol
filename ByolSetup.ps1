@@ -1,8 +1,8 @@
 # Modules needed: Az.Accounts, Az.Resources, Az.Storage
 # Sample usage:
-#.\ByolSetup.ps1 <subscriptionid> <storage account name> <resource group name where storage account is present> <container name> <optional: path under the container>
-#.\ByolSetup.ps1 8a7d40cd-fb92-4e9a-9c12-0b738ee08ba9 testpsbyol2 testpsrg testcontainer
-#.\ByolSetup.ps1 8a7d40cd-fb92-4e9a-9c12-0b738ee08ba9 testpsbyol2 testpsrg testcontainer dir1/dir2
+#.\ByolSetup.ps1 <subscriptionid> <storage account name> <resource group name where storage account is present> <optional: path under the container>
+#.\ByolSetup.ps1 8a7d40cd-fb92-4e9a-9c12-0b738ee08ba9 testpsbyol2 testpsrg
+#.\ByolSetup.ps1 8a7d40cd-fb92-4e9a-9c12-0b738ee08ba9 testpsbyol2 testpsrg dir1/dir2
 
 <#
 .Description
@@ -19,14 +19,14 @@
         if -OAuthAccessOnly switch is provided.
 
     Before running the script:
-    1.  Please create a new ADLS Gen2 Storage account or choose an existing one. 
+    1.  Please create a new ADLS Gen2 Storage account with HierarchialNameSpace Enabled or choose an existing one. 
         To create new account, please use:
         https://docs.microsoft.com/en-us/azure/storage/blobs/create-data-lake-storage-account
-    2.  User running this script should have "Storage Blob Data Owner" access on the storage account/container level. 
+    2.  User running this script should have "Storage Blob Data Owner" access on the storage account/container level or this script will create one. 
         To add role assignment, please use:
         https://docs.microsoft.com/en-us/azure/role-based-access-control/role-assignments-portal.
         Role assignment can be removed after the script has completed running successfully.
-    3.  Create or choose a container under that storage account.
+    3.  Create a customerinsights container under that storage account or this script will create one.
     4.  Optionally create a folder or choose a folder under the container to be used as mount point.
         If folder is not provided container will be used as the mount point.
 
@@ -39,14 +39,12 @@ Storage account name.
 .PARAMETER ResourceGroupName
 Resource group name under which the storage account was created.
 
-.PARAMETER ContainerName
-Container name under the storage account.
-
 .PARAMETER SecurityGroupNamePrefix
 Prefix for security group names. Security groups will be named SecurityGroupNamePrefix-Dataverse-readers and SecurityGroupNamePrefix-Dataverse-contributors
 
 .PARAMETER Path
 Optional: Folder under the container that needs to be used as mount point. If not given, container will be used as the mount point.
+Note: This is not supported at this point.
 
 .PARAMETER ReaderSecurityGroupId
 Optional: Id of the reader security group.
@@ -58,16 +56,16 @@ Optional: Id of the contributor security group.
 Optional: Switch to prevent Dataverse from using SAS tokens to access the lake.
 
 .EXAMPLE
-.\ByolSetup.ps1 -SubscriptionId 8a7d40cd-fb92-4e9a-9c12-0b738ee08ba9 -StorageAccountName byodltest -ResourceGroupName testpsrg -ContainerName testcontainer -SecurityGroupNamePrefix audienceinsights
+.\ByolSetup.ps1 -SubscriptionId 8a7d40cd-fb92-4e9a-9c12-0b738ee08ba9 -StorageAccountName byodltest -ResourceGroupName testpsrg -SecurityGroupNamePrefix audienceinsights
 
 .EXAMPLE
-.\ByolSetup.ps1 -SubscriptionId 8a7d40cd-fb92-4e9a-9c12-0b738ee08ba9 -StorageAccountName byodltest -ResourceGroupName testpsrg -ContainerName testcontainer -Path mydirectory  -SecurityGroupNamePrefix audienceinsights
+.\ByolSetup.ps1 -SubscriptionId 8a7d40cd-fb92-4e9a-9c12-0b738ee08ba9 -StorageAccountName byodltest -ResourceGroupName testpsrg -Path mydirectory  -SecurityGroupNamePrefix audienceinsights
 
 .EXAMPLE
-.\ByolSetup.ps1 -SubscriptionId 8a7d40cd-fb92-4e9a-9c12-0b738ee08ba9 -StorageAccountName byodltest -ResourceGroupName testpsrg -ContainerName testcontainer  -SecurityGroupNamePrefix audienceinsights -OAuthAccessOnly
+.\ByolSetup.ps1 -SubscriptionId 8a7d40cd-fb92-4e9a-9c12-0b738ee08ba9 -StorageAccountName byodltest -ResourceGroupName testpsrg -SecurityGroupNamePrefix audienceinsights -OAuthAccessOnly
 
 .EXAMPLE
-.\ByolSetup.ps1 -SubscriptionId 8a7d40cd-fb92-4e9a-9c12-0b738ee08ba9 -StorageAccountName byodltest -ResourceGroupName testpsrg -ContainerName testcontainer  -ReaderSecurityGroupId 943093db-9cbd-4098-8e42-0af878ca4226 -ContributorSecurityGroupId 05e96bdf-5c2b-4f42-ad9d-e46bbc1e136b
+.\ByolSetup.ps1 -SubscriptionId 8a7d40cd-fb92-4e9a-9c12-0b738ee08ba9 -StorageAccountName byodltest -ResourceGroupName testpsrg -ReaderSecurityGroupId 943093db-9cbd-4098-8e42-0af878ca4226 -ContributorSecurityGroupId 05e96bdf-5c2b-4f42-ad9d-e46bbc1e136b
 
 #> 
 
@@ -75,7 +73,6 @@ Param(
     [parameter(Mandatory)] [string] $SubscriptionId,
     [parameter(Mandatory)] [string] $StorageAccountName,
     [parameter(Mandatory)] [string] $ResourceGroupName,
-    [parameter(Mandatory)] [string] $ContainerName,
     [string] $SecurityGroupNamePrefix,
     [string] $Path,
     [string] $ReaderSecurityGroupId,
@@ -166,6 +163,25 @@ function AddOwnerIfNotExists($groupId, $ownerId)
     Retry({Invoke-RestMethod -Method Post -Uri $url -Body $json -Headers $headers -ContentType 'application/json'})
 }
 
+function CreateContainerIfNotExists($ResourceGroupName, $StorageAccountName, $containerName)
+{
+    $storageAcc=Get-AzStorageAccount -ResourceGroupName $ResourceGroupName -Name $StorageAccountName      
+    ## Get the storage account context  
+    $ctx=$storageAcc.Context
+    $isContainerExists=Get-AzStorageContainer -Name $containerName -Context $ctx -ErrorAction SilentlyContinue
+    if(!$isContainerExists)  
+    {
+        Write-Host -ForegroundColor Magenta $containerName "- container does not exist."   
+        ## Create a new container 
+        New-AzStorageContainer -Name $containerName -Context $ctx -Permission Container
+        Write-Host -ForegroundColor Green $containerName "- container created successfully."
+    }
+    else
+    {
+        Write-Host -ForegroundColor Green $containerName "-container exists."   
+    }
+}
+
 function GetCurrentUserObjectID 
 {
     $ctx = Get-AzContext
@@ -198,12 +214,12 @@ function AssignRoleIfNotExists($userId, $scope, $roleName)
     }
 }
 
-function SetACL($storageContext, $ContainerName, $currPath, $readerSgId, $contribSgId, $setDefault)
+function SetACL($storageContext, $containerName, $currPath, $readerSgId, $contribSgId, $setDefault)
 {
     $params =
     @{ 
         'Context' = $storageContext
-        'FileSystem' = $ContainerName
+        'FileSystem' = $containerName
     }
 
     if ($currPath)
@@ -293,29 +309,30 @@ $acct = Connect-AzAccount -Subscription $SubscriptionId
 
 Write-Host "Starting..." -ForegroundColor Green
 $storageScope = "/subscriptions/" + $SubscriptionId + "/resourceGroups/" + $ResourceGroupName + "/providers/Microsoft.Storage/storageAccounts/" + $StorageAccountName
-$containerScope = $storageScope + "/blobServices/default/containers/" + $ContainerName
+$containerName = "customerinsights"
+$containerScope = $storageScope + "/blobServices/default/containers/" + $containerName
 
 ###############################################################
-# Check if the container name is "customerinsights".
+# Check if the customerinsights container exists or create one.
 ###############################################################
-if($ContainerName -cne "customerinsights")
-{
-	Write-Host "Container name must be customerinsights." -ForegroundColor Red
-	return;
-}
+CreateContainerIfNotExists $ResourceGroupName $StorageAccountName $containerName
 
-###############################################################
-# Check if the user has  "Storage Blob Data Owner" permissions.
-###############################################################
+#############################################################################
+# Check if the user has  "Storage Blob Data Owner" permissions or assign it.
+#############################################################################
 $userId = GetCurrentUserObjectID
 if ($userId)
 {
     $userRole = Get-AzRoleAssignment -ObjectId $userId -RoleDefinitionName "Storage Blob Data Owner" -Scope $storageScope
     if (!$userRole)
     {
-        Write-Host "User does not have 'Storage Blob Data Owner' on the storage account."
-        Write-Host "Role assignments can take upto 30 minutes to reflect. If you have just added role assignemnt then try again in few minutes."
-        return;
+        Write-Host -ForegroundColor Magenta "User doesn't have Storage Blob Data Owner role on the storage account. Adding the role on the storage account"
+        New-AzRoleAssignment -ObjectId $userId -RoleDefinitionName "Storage Blob Data Owner" -Scope $storageScope
+        Write-Host -ForegroundColor Green "Succesfully added Storage Blob Data Owner role on the storage account."
+    }
+    else
+    {
+        Write-Host -ForegroundColor Green "Storage Blob Data owner role exists on the storage account"
     }
 }
 
@@ -425,7 +442,7 @@ try
     {
         $setDefault = $false
     }
-    SetACL $storageContext $ContainerName $null $readerSg.Id $contribSg.Id $setDefault
+    SetACL $storageContext $containerName $null $readerSg.Id $contribSg.Id $setDefault
 
     ###############################################################
     # Setting ACL on the path
@@ -448,7 +465,7 @@ try
 
             $currPath = $currPath + $folders[$i] + "/"
             Write-Host "Setting ACL on folder" $currPath -ForegroundColor Green
-            SetACL $storageContext $ContainerName $currPath $readerSg.Id $contribSg.Id $setDefault 
+            SetACL $storageContext $containerName $currPath $readerSg.Id $contribSg.Id $setDefault 
         }
     }
 }
@@ -466,7 +483,7 @@ Write-Host "Setting ACL on the existing files and folders" -ForegroundColor Gree
 $params =
 @{ 
     'Context' = $storageContext
-    'FileSystem' = $ContainerName
+    'FileSystem' = $containerName
 }
 
 if ($Path)
@@ -491,7 +508,7 @@ if ($updateAcl.FailedEntries)
 ###############################################################
 # Write output
 ###############################################################
-$output = 'https://' + $StorageAccountName + ".dfs.core.windows.net/" + $ContainerName
+$output = 'https://' + $StorageAccountName + ".dfs.core.windows.net/" + $containerName
 if ($Path)
 {
     $output = $output + "/" + $Path
