@@ -72,6 +72,10 @@ function CreateSecurityGroupIfNotExists($groupName, $ownerId)
     {
         $grp = New-AzADGroup -DisplayName $groupName -MailNickName $groupName -ErrorAction Stop
     }
+    else
+    {
+        Write-Host "Security group" $groupName "already exists."
+    }
 
     AddOwnerIfNotExists $grp.Id $ownerId
 
