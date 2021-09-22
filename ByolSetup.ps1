@@ -130,20 +130,6 @@ function CreateServicePrincipalIfNotExists($appId, $displayName)
     return $obj;
 }
 
-function CreateSecurityGroupIfNotExists($groupName, $ownerId)
-{
-    $grp = Get-AzADGroup -DisplayName $groupName
-    
-    if (!$grp)
-    {
-        $grp = New-AzADGroup -DisplayName $groupName -MailNickName $groupName -ErrorAction Stop
-    }
-
-    AddOwnerIfNotExists $grp.Id $ownerId
-
-    return $grp;
-}
-
 function AddOwnerIfNotExists($groupId, $ownerId)
 {
     $token = Get-AzAccessToken -ResourceUrl "https://graph.microsoft.com" -ErrorAction Stop
@@ -171,14 +157,14 @@ function CreateContainerIfNotExists($ResourceGroupName, $StorageAccountName, $co
     $isContainerExists=Get-AzStorageContainer -Name $containerName -Context $ctx -ErrorAction SilentlyContinue
     if(!$isContainerExists)  
     {
-        Write-Host -ForegroundColor Magenta $containerName "- container does not exist."   
+        Write-Host -ForegroundColor Magenta $containerName "container does not exist."   
         ## Create a new container 
         New-AzStorageContainer -Name $containerName -Context $ctx -Permission Container -ErrorAction Stop
-        Write-Host -ForegroundColor Green $containerName "- container created successfully."
+        Write-Host -ForegroundColor Green $containerName "container created successfully."
     }
     else
     {
-        Write-Host -ForegroundColor Green $containerName "-container exists."   
+        Write-Host -ForegroundColor Green $containerName "container exists."   
     }
 }
 
@@ -254,25 +240,39 @@ function SetACL($storageContext, $containerName, $currPath, $readerSgId, $contri
     Write-Host "Updating ACL with group information"
     $params['Acl'] = $acl
     $resp = Update-AzDataLakeGen2Item @params
+
+    if (!$resp)
+    {
+        throw
+    }
 }
 
-function DoesModuleExist($moduleName)
+function DoesModuleExist($moduleName, $version)
 {
-    if (Get-Module -ListAvailable -Name $moduleName) {
+    $module = Get-Module -ListAvailable -Name $moduleName
+
+    if ($module -and ($module[0].Version -ge $version)) 
+    {
+        Write-Host $moduleName $module[0].Version "( >=" $version ") found." -ForegroundColor Green
         return $true;
     } 
     else {
-        Write-Host "Please install" $moduleName "before running this script."
+        Write-Host "Please install" $moduleName $version "before running this script."
         return $false;
     }
 }
 
 ###############################################################
-# Check for modules.
+# Check for modules and versions
 ###############################################################
-$modules = DoesModuleExist "Az.Accounts";
-$modules = $modules -and (DoesModuleExist "Az.Resources");
-$modules = $modules -and (DoesModuleExist "Az.Storage");
+$ver = New-Object -TypeName System.Version -ArgumentList 2,5,1
+$modules = DoesModuleExist "Az.Accounts" $ver;
+
+$ver = New-Object -TypeName System.Version -ArgumentList 3,2,1
+$modules =  (DoesModuleExist "Az.Resources" $ver) -and $modules;
+
+$ver = New-Object -TypeName System.Version -ArgumentList 3,9,0
+$modules = (DoesModuleExist "Az.Storage" $ver) -and $modules;
 
 if (!$modules)
 {
@@ -427,6 +427,34 @@ else
     }
 }
 
+###############################################################
+# Check if role assignment has propogated
+###############################################################
+Write-Host "Checking if Storage Blob Data Owner role assignment has propogated."
+Write-Host "This can take some time. Please leave this window open."
+Write-Host -NoNewline "Checking..."
+
+$continue = $True;
+while ($continue)
+{
+    Write-Host -NoNewLine "."
+    $role = Get-AzRoleAssignment -ObjectId $userId -RoleDefinitionName "Storage Blob Data Owner" -Scope $storageScope
+
+    if ($role)
+    {
+        Write-Host "DONE"
+        $continue = $False;
+    }
+    else
+    {
+        
+        Start-Sleep 10
+    }
+}
+
+###############################################################
+# Setting ACLs
+###############################################################
 try
 {
     ###############################################################
