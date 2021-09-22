@@ -159,7 +159,7 @@ function CreateContainerIfNotExists($ResourceGroupName, $StorageAccountName, $co
     {
         Write-Host -ForegroundColor Magenta $containerName "container does not exist."   
         ## Create a new container 
-        New-AzStorageContainer -Name $containerName -Context $ctx -Permission Container
+        New-AzStorageContainer -Name $containerName -Context $ctx -Permission Container -ErrorAction Stop
         Write-Host -ForegroundColor Green $containerName "container created successfully."
     }
     else
