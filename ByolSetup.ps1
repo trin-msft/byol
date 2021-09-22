@@ -499,6 +499,12 @@ try
 }
 catch
 {
+    if ($PSItem.ToString() -Match "does not support blobstorageevents or softdelete") 
+    {
+        Write-Host "Error setting ACLs: $($PSItem.ToString()) Please use HNS Enabled Gen2 storage account." -ForegroundColor Red
+        return;
+    }
+    
     Write-Host "Error setting ACLs: $($PSItem.ToString())"
     return;
 }
