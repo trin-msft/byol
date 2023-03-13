@@ -358,7 +358,7 @@ try
 
     if (!$ReaderSecurityGroupId)
     {
-        $sgInfo = & .\CreateSecurityGroups.ps1 -SubscriptionId $SubscriptionId -SecurityGroupNamePrefix $SecurityGroupNamePrefix -FromMainScript
+        $sgInfo = & .\TIPCreateSecurityGroups.ps1 -SubscriptionId $SubscriptionId -SecurityGroupNamePrefix $SecurityGroupNamePrefix -FromMainScript
         $ReaderSecurityGroupId = $sgInfo.ReaderSecurityGroupId
         $ContributorSecurityGroupId = $sgInfo.ContributorSecurityGroupId
     }
@@ -375,8 +375,8 @@ try
 }
 catch
 {
-    Write-Host "If you are unable to create security groups, please ask your tenant admin to create two security groups by running CreateSecurityGroups.ps1. The script is in the same folder as this file."
-    Write-Host ".\CreateSecurityGroups.ps1 -SubscriptionId" $SubscriptionId "-SecurityGroupNamePrefix" $SecurityGroupNamePrefix
+    Write-Host "If you are unable to create security groups, please ask your tenant admin to create two security groups by running TIPCreateSecurityGroups.ps1. The script is in the same folder as this file."
+    Write-Host ".\TIPCreateSecurityGroups.ps1 -SubscriptionId" $SubscriptionId "-SecurityGroupNamePrefix" $SecurityGroupNamePrefix
     Write-Host "After the groups are created the tenant admin should be able to provide you the group object ids."
     Write-Host "Once you have the group object ids, please re-run this script using same paramaters like now but also additionally add -ReaderSecurityGroupId <reader group object id> -ContributorSecurityGroupId <contributor group object id>."
     return;
